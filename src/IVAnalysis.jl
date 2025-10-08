@@ -81,17 +81,17 @@ function fit_iv(
         p0 = p00
         vd = vdat[ipts, i]
         istep = mean(idat[ipts, i]) - mean(idat[1:10, i])
-        fit = curve_fit(expmodel, td .- iwin[1], vd, p0; lower=lb, upper=ub)
-        params[j] = fit.param
+        fit = curve_fit(expmodel, td .- iwin[1], vd, p0;) #  lower=lb, upper=ub)
+        params[i] = fit.param
         @printf(
             "Params: DC= %8.2f mV A = %8.2f mV  Tau = %8.3f ms Istep= %8.3f nA\n",
-            params[j][1] * 1e3,
-            params[j][2] * 1e3,
-            params[j][3] * 1e3,
+            params[i][1] * 1e3,
+            params[i][2] * 1e3,
+            params[i][3] * 1e3,
             istep * 1e9
         )
-        tfit[:, j] = td
-        vfit[:, j] = expmodel(td .- iwin[1], params[j])
+        tfit[:, i] = td
+        vfit[:, i] = expmodel(td .- iwin[1], params[i])
     end
     println("returning fit and params")
     return tfit, vfit, imn, params
@@ -144,8 +144,8 @@ and plot the result
 function IV_read_and_plot(; filename::String="", fits::Bool=true, ivs::Bool=true, analyze_spikes::Bool=true,
     decimate::Int=10, maxsize::Int=100000)
     tdat, idat, vdat, data_info = Acq4Reader.read_hdf5(filename)
-    print(data_info)
-    return
+    # print(data_info)
+    # return
     
     top_lims, bot_lims = Acq4Reader.get_lims(data_info["clampstate"]["mode"])
     @printf(
@@ -163,19 +163,21 @@ function IV_read_and_plot(; filename::String="", fits::Bool=true, ivs::Bool=true
         vdat = boxcar(vdat, decimate)
     end
     # println("Resampled to : ", size(tdat), size(idat), size(vdat)," maxt = ", maximum(tdat[1]), " dt: ", mean(diff(tdat[:, 1], dims=1)))
-    if ivs
-        vm, imss, imp = IVAnalysis.compute_iv(tdat, vdat, idat)
-    end
+    t0 = parse(Float64, data_info["MultiClamp1.pulse_params"]["delay"])*1e-3
+    t1 = parse(Float64, data_info["MultiClamp1.pulse_params"]["duration"])
+    println("Pulse start: ", t0, "  duration: ", t1)
+    vm, imss, imp = IVAnalysis.compute_iv(tdat, vdat, idat, ss_win=[t0+0.8*t1, t0+t1], pk_win=[t0+0.001, t0+0.1])
+
     if fits
         tfit, vfit, params =
-            IVAnalysis.fit_iv(tdat, vdat, idat, iwin=[0.15, 0.2], ilim=[-1e-9, 10e-12])
+            IVAnalysis.fit_iv(tdat, vdat, idat, iwin=[t0, t0+0.05], ilim=[-1e-9, 10e-12])
         tfit2, vfit2, params2 =
-            IVAnalysis.fit_iv(tdat, vdat, idat, iwin=[0.2, 0.6], ilim=[-1e-9, 10e-12])
+            IVAnalysis.fit_iv(tdat, vdat, idat, iwin=[t0+0.05, t0+t1], ilim=[-1e-9, 10e-12])
 
     end
     println("analyze spikes? ", analyze_spikes)
     if analyze_spikes
-        spk_counts, spk_amps, spk_latencies = SpikeAnalysis.AnalyzeSpikes(tdat, vdat, idat)
+        spk_counts, spk_amps, spk_latencies = SpikeAnalysis.AnalyzeSpikes(tdat, vdat, idat, timewindow=[t0, t0+t1])
     end
 
     # now for the plot
