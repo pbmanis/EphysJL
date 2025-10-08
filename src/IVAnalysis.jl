@@ -5,7 +5,7 @@ using Statistics
 using Printf
 using Revise
 using DSP
-
+using Gtk
 using PyPlot
 using PyCall
 pygui(true)
@@ -105,7 +105,7 @@ Otherwise, we try to do analysis on the selected directory (Acq4 dataset).
 function IV()
     filename = ""
     while filename == ""
-        filename = open_dialog("Select Dataset Folder", action=GtkFileChooserAction.SELECT_FOLDER)
+        filename = Gtk.open_dialog("Select Dataset Folder", action=Gtk.GtkFileChooserAction.SELECT_FOLDER)
         println(filename)
         if (filename != "") & isdir(filename)
             IV_read_and_plot(filename=filename, fits=false, ivs=false, analyze_spikes=false)
