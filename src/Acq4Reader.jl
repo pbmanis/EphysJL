@@ -1,38 +1,34 @@
-# __precompile__()
 module Acq4Reader
-using AddPackage
-@add using Statistics
-@add using HDF5
-# using Plots
-# using PyPlot
-# using Printf
-
-@add using ThreadsX
-@add using ArraysOfArrays
-@add using ElasticArrays
-@add using Crayons
-@add using Distributed
-@add using SharedArrays  # important for parallel/looping
+using Statistics
+using HDF5
+using Printf
+using Base.Threads
+using ArraysOfArrays
+using ElasticArrays
+using Crayons.Box
+using Distributed
+using SharedArrays  # important for parallel/looping
 # using ProgressMeter
 using InteractiveUtils
 
 using PyCall
+include("Configfile.jl")
 # pgc = pyimport("pyqtgraph.configfile")  # use python configuration reader...
 
 # Theoretically, the following should work, but we encounter an error:
 # "[NameError: name 'array' is not defined]")
 # on the scanner target array structure with lots of "array([ 0.00157848,  0.003536  ])"
-scriptdir = @__DIR__
-pushfirst!(PyVector(pyimport("sys")."path"), scriptdir)
-pgc = pyimport("python.configfile")  # use a local python routine to read the config files
+# scriptdir = @__DIR__
+# pushfirst!(PyVector(pyimport("sys")."path"), scriptdir)
+# pgc = pyimport("python.configfile")  # use a local python routine to read the config files
 
 export read_hdf5, get_lims, get_stim_times
 
-pyplot()
 
 
 function get_subdirs(base_dir)
-    #
+    # read the subdirectories of the current base_dir
+    # only return those that are protocol sweeps
     subdirs = readdir(base_dir)
     print("subdirs in ", base_dir, ": ", join(subdirs, ", "))
     println()
@@ -44,28 +40,14 @@ function get_subdirs(base_dir)
     return subdirs
 end
 
-"""
-    read_hdf5(filename)
-
-    Read the protocol data from the specified metaarray file,
-    treating it as an HDF5 file (which it is).
-
-    Return the data as 3 2-D arrays (sweep, time) and .
-"""
 function read_hdf5(filename)
     #=
+    Read the protocol data from the specified metaarray file,
+    treating it as an HDF5 file (which it is)
 
+    Return the data, and some "standard" y limits.
     New parallel version, 5/24/2021 pbm
     =#
-
-    okfile = isdir(filename)
-    if !okfile
-        println("file not found:")
-        println("    ", filename)
-        error()
-    end
-
-    # define standard names for devices
     device = "MultiClamp1.ma"
     # device = "Clamp1.ma"
     laser_device = "Laser-Blue-raw.ma"
@@ -75,7 +57,7 @@ function read_hdf5(filename)
     vdat = Array{Float64}(undef)
     tdat = Array{Float64}(undef)
     nsweeps = size(sweeps)[1]
-    println("    Nsweeps: ", nsweeps)
+    println(WHITE_FG, "    Nsweeps: ", nsweeps)
     # temporary allocation so we don't lose scope on arrays
     nwave = 1
     s_idat = SharedArray{Float64,2}((nwave, nsweeps))
@@ -86,17 +68,18 @@ function read_hdf5(filename)
     mode = ""
     clampstate = ""
     data_info = ""
-    println("    Number of threads: ", Base.Threads.nthreads())
-    # note we set this up for threading, but that causes memory errors...
+    println("    Number of threads: ", Threads.nthreads())
+    # note we wet this up for threading, but that causes memory errors...
     # kept same structure here though.
 
     for s = 1:nsweeps
         time, data, data_info = read_one_sweep(filename, sweeps[s], device)
-  
+
         if time == false
             continue
         end
-        # sweep mode will be VC, IC or IC=0 (may depend on age of acquisition code)
+        # will be VC, IC or IC=0 (may depend on age of acquisition code)
+
         sweep_mode = String(data_info["clampstate"]["mode"])
         if first
             mode = sweep_mode
@@ -104,13 +87,11 @@ function read_hdf5(filename)
             if mode != sweep_mode
                 throw(
                     ErrorException(
-                        string(
-                            "Mode changed from ",
-                            _mode,
-                            " to ",
-                            sweep_mode,
-                            "inside protocol",
-                        ),
+                        "Mode changed from ",
+                        _mode,
+                        " to ",
+                        sweep_mode,
+                        "inside protocol",
                     ),
                 )
             end
@@ -124,47 +105,61 @@ function read_hdf5(filename)
             s_vdat = SharedArray{Float64,2}((nwave, nsweeps))
             s_tdat = SharedArray{Float64,2}((nwave, nsweeps))
             first = false
+            # s_tdat[:,s] = time
+            # s_idat[:,s] = data[:, indx1]
+            # s_vdat[:,s] = data[:, indx2]
         end
         s_tdat[:, s] = time
         s_idat[:, s] = data[:, indx1]
         s_vdat[:, s] = data[:, indx2]
-
+        # println("s: ", s)
     end
     if mode == ""
         finalize(s_tdat)
         finalize(s_idat)
         finalize(s_vdat)
         @everywhere GC.gc()
-        println("mode: ", mode)
         throw(ErrorException("No acquisition mode found"))
     end
     idat = deepcopy(s_idat)
     tdat = deepcopy(s_tdat)
     vdat = deepcopy(s_vdat)
     indexfile = joinpath(filename, ".index")
-    # println("Reading index file: ", indexfile)
-    cf = Configfile.read_configfile(indexfile)
-    if haskey(cf["."]["devices"], "Laser-Blue-raw")
-        wavefunction = cf["."]["devices"]["Laser-Blue-raw"]["channels"]["pCell"]["waveGeneratorWidget"]["function"]
-        data_info["Laser.wavefunction"] = deepcopy(wavefunction)
-    elseif haskey(cf["."]["devices"], "MultiClamp1")
-        wavefunction = cf["."]["devices"]["MultiClamp1"]["waveGeneratorWidget"]["function"]
-        data_info["MultiClamp1.wavefunction"] = deepcopy(wavefunction)
-        pulse = cf["."]["devices"]["MultiClamp1"]["waveGeneratorWidget"]["stimuli"]["Pulse"]
-        data_info["MultiClamp1.pulse_pars"] = [
-            parse(
-                Float64,
-                pulse["start"]["value"],
-            ),
-            parse(
-                Float64,
-                pulse["length"]["value"],
-            ),
-        ]
-
+    cf = Configfile.readConfigFile(indexfile)[2]["."]
+    # println(keys(cf["devices"]))
+    if haskey(cf["devices"], "Laser-Blue-raw")
+        wavefunction =
+            cf["devices"]["Laser-Blue-raw"]["channels"]["pCell"]["waveGeneratorWidget"]["function"]
     else
         wavefunction = nothing
     end
+    # print("Wavefunction: ", wavefunction, "\n")
+    # println(keys(cf["devices"]["MultiClamp1"]["waveGeneratorWidget"]))
+    if haskey(cf["devices"]["MultiClamp1"], "waveGeneratorWidget")
+        wavefunction_mc =
+            cf["devices"]["MultiClamp1"]["waveGeneratorWidget"]["function"]
+        # print("MC Wavefunction: ", wavefunction_mc, "\n")
+        # parse a string that looks like: pulse(150*ms, 1*s, Pulse_amplitude)
+        rp1 = r"(?P<mode>[a-z]+\()(?P<delay>\d+.?\d)\*(?P<delay_unit>[msunp]{0,2})\s*,\s*"
+        rp2 = r"(?P<duration>\d*\.?\d*)\*(?P<duration_unit>[msunp]{0,2})\s*,\s*"
+        rp3 = r"(?P<Param>[_a-zA-Z]*)\)"
+        s = match(rp1*rp2*rp3, wavefunction_mc)
+        # println("MC pulse parameters: ", s.captures)
+        print("MC Params: ", cf["devices"]["MultiClamp1"]["waveGeneratorWidget"]["params"], "\n")
+        data_info["MultiClamp1.pulse_params"] = s
+    end
+    if haskey(cf["devices"], "Photodiode")
+        wavefunction_pd =
+            cf["devices"]["Photodiode"]["channels"]["pCell"]["waveGeneratorWidget"]["function"]
+        # print("PD Wavefunction: ", wavefunction_pd, "\n")
+    end
+    if haskey(cf["devices"], "stimuli")
+        wavefunction_stimuli =
+            cf["devices"]["stimuli"]
+        # print("Stimuli Wavefunction: ", wavefunction_stimuli, "\n")
+    end
+    data_info["Laser.wavefunction"] = deepcopy(wavefunction)
+    println("Data info keys: ", keys(data_info) , "\n")
     finalize(s_tdat)
     finalize(s_idat)
     finalize(s_vdat)
@@ -223,27 +218,39 @@ function get_indices(data_info)
             botidx = 2
         end
     else
-        println("mode is not known: ", mode)
+        println(RED_FG, "mode is not known: ", mode, WHITE_FG)
     end
     return topidx, botidx
 end
 
-function get_stim_arg(name, data_info; device::AbstractString="Laser")
-    names = Dict("latency" => 1, "duration" => 2, "amplitude" => 3)
-    index = names[name]
+# function get_stim_times(data_info)
+#     wv = data_info["Laser.wavefunction"]
+#     u = split(wv, "\n")
+#     stim_lats = Vector{Float64}()
+#     re_float = r"[+-]?\d+\.?\d*"
+#     for i = 1:size(u)[1]
+#         s = match(re_float, u[i])
+#         append!(stim_lats, parse(Float64, s.match) * 1e3)
+#     end
+#     return stim_lats
+# end
+
+function get_stim_times(data_info; device="Laser")
+    #=
+    Retrieve stimulus times from a device's wavefunction parameters
+    The default will get the information from a Laser device
+    =#
     query = device * ".wavefunction"
     wv = data_info[query]
-    u = split(wv, "\\n")
-    stim_arg = Vector{Float64}()
-    re_float = r"([+-]?\d+\.?\d*), ([+-]?\d+\.?\d*), ([+-]?\d+\.?\d*)"
-    for i in 1:size(u)[1]
+    u = split(wv, "\n")
+    stim_lats = Vector{Float64}()
+    re_float = r"[+-]?\d+\.?\d*"
+    for i = 1:size(u)[1]
         s = match(re_float, u[i])
-        append!(stim_arg, parse(Float64, s[index]))
-        end
-    return stim_arg
+        append!(stim_lats, parse(Float64, s.match) * 1e3)
+    end
+    return stim_lats
 end
-
-
 
 function read_one_sweep(filename::AbstractString, sweep_dir, device)
     #=
@@ -256,8 +263,8 @@ function read_one_sweep(filename::AbstractString, sweep_dir, device)
     full_filename = joinpath(filename, sweep_dir, device)
     okfile = isfile(full_filename)
     if !okfile
-        println("File not found:")
-        println("    ", full_filename)
+        println(RED_FG, "File not found:")
+        println("    ", full_filename, WHITE_FG)
         return false, false, false
     end
     tf = HDF5.ishdf5(full_filename)
@@ -296,24 +303,20 @@ end
 
 function test_configread()
     filename = "/Users/pbmanis/Desktop/2018.09.27_000/ImageSequence_000/.index"
-    data = pgc.readConfigFile(filename)
+    data = Configfile.readConfigFile(filename)
     println(data)
     fn = "/Users/pbmanis/Desktop/Python/mrk-nf107/data_for_testing/CCIV/.index"
-    data = pgc.readConfigFile(fn)
+    data = Configfile.readConfigFile(fn)
     println(data)
 end
-    
+
 function test_reader()
     # local test file name
     # filename = "/Volumes/Pegasus/ManisLab_Data3/Kasten_Michael/Pyramidal/2018.02.12_000/slice_001/cell_000/CCIV_1nA_max_000"
-    filename="/Volumes/T7_data/NF107Ai32_Het/2022.03.18_000/slice_000/cell_000/CCIV_4nA_max_1s_pulse_posonly_000"
+    filename = "/Volumes/T7_data/NF107Ai32_Het/2022.03.18_000/slice_000/cell_000/CCIV_4nA_max_1s_pulse_posonly_000"
     # filename = "/T7_data/NF107Ai32_Het/2022.03.18_000/slice_000/cell_000/CCIV_1nA_max_1s_pulse_000"
     read_hdf5(filename)
 end
 
-end
 
-function julia_main()::Cint
-    # do something based on ARGS?
-    return 0 # if things finished successfully
 end
