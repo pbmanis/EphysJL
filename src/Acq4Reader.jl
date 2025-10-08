@@ -27,13 +27,17 @@ export read_hdf5, get_lims, get_stim_times
 pyplot()
 
 
-
 function get_subdirs(base_dir)
     # read the subdirectories of the current base_dir
     # only return those that are protocol sweeps
     subdirs = readdir(base_dir)
-    deleteat!(subdirs, subdirs .== ".index")
-    deleteat!(subdirs, subdirs .== ".DS_Store")
+    print("subdirs in ", base_dir, ": ", join(subdirs, ", "))
+    println()
+    strings_to_remove = [".DS_Store", ".index", "._.index"]
+    filter!(s -> !(s in strings_to_remove), subdirs)
+    print("    Found ", length(subdirs), " subdirectories.")
+    println("subdirs: ", join(subdirs, ", "))
+
     return subdirs
 end
 
@@ -46,9 +50,9 @@ function read_hdf5(filename)
     New parallel version, 5/24/2021 pbm
     =#
     device = "MultiClamp1.ma"
+    # device = "Clamp1.ma"
     laser_device = "Laser-Blue-raw.ma"
     photodiode_device = "Photodiode.ma"
-
     sweeps = get_subdirs(filename)
     idat = Array{Float64}(undef)
     vdat = Array{Float64}(undef)
@@ -68,13 +72,15 @@ function read_hdf5(filename)
     println("    Number of threads: ", Threads.nthreads())
     # note we wet this up for threading, but that causes memory errors...
     # kept same structure here though.
-    @time for s = 1:nsweeps
-        sweep = sweeps[s]
-        time, data, data_info = read_one_sweep(filename, sweep, device)
+
+    for s = 1:nsweeps
+        time, data, data_info = read_one_sweep(filename, sweeps[s], device)
+  
         if time == false
             continue
         end
- # will be VC, IC or IC=0 (may depend on age of acquisition code)
+        # will be VC, IC or IC=0 (may depend on age of acquisition code)
+
         sweep_mode = String(data_info["clampstate"]["mode"]) 
         if first
             mode = sweep_mode
@@ -144,14 +150,19 @@ function get_lims(mode)
     =#
     if mode == "'VC'"
         # print("VC")
+        println(GREEN_FG, "Limts for VC", WHITE_FG)
         top_lims = (-0.4e-9, 0.4e-9)
         bot_lims = (-120e3, 100e3)
     elseif mode == "'IC'"
+        println(GREEN_FG, "Limits for IC", WHITE_FG)
         top_lims = (-120e-3, 40e-3)
         bot_lims = (-2e-9, 2e-9)
     else
         println(RED_FG, "Unknown Mode: ", mode, WHITE_FG)
+        top_lims = (-inf, +inf)
+        bot_lims = (-inf, +inf)
     end
+    return top_lims, bot_lims
 end
 
 function get_indices(data_info)
@@ -255,11 +266,13 @@ function read_one_sweep(filename::AbstractString, sweep_dir, device)
         "Laser.wavefunction" => "",
     )
 
-    time = deepcopy(fid["info"]["1"]["values"][:])
-    data = deepcopy(fid["data"][:, :])
+    time_array = deepcopy(fid["info"]["1"]["values"][:])
+    # println("    Read sweep: ", sweep_dir, "  time length: ", size(time_array)[1],)
+    # println(" dt: ", mean(diff(time_array)))
+    data_array = deepcopy(fid["data"][:, :])
     close(fid)
 
-    return time, data, data_info
+    return time_array, data_array, data_info
 end
 
 function test_configread()
@@ -273,7 +286,9 @@ end
     
 function test_reader()
     # local test file name
-    filename = "/Volumes/Pegasus/ManisLab_Data3/Kasten_Michael/Pyramidal/2018.02.12_000/slice_001/cell_000/CCIV_1nA_max_000"
+    # filename = "/Volumes/Pegasus/ManisLab_Data3/Kasten_Michael/Pyramidal/2018.02.12_000/slice_001/cell_000/CCIV_1nA_max_000"
+    filename="/Volumes/T7_data/NF107Ai32_Het/2022.03.18_000/slice_000/cell_000/CCIV_4nA_max_1s_pulse_posonly_000"
+    # filename = "/T7_data/NF107Ai32_Het/2022.03.18_000/slice_000/cell_000/CCIV_1nA_max_1s_pulse_000"
     read_hdf5(filename)
 end
 

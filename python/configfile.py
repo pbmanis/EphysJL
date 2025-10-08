@@ -265,8 +265,8 @@ def test():
     fn = "/Users/pbmanis/Desktop/Python/mrk-nf107/data_for_testing/CCIV/.index"
     data = readConfigFile(fn)
     print(data)
-    
-if __name__ == '__main__':
+
+def test_simple():
     import tempfile
     fn = tempfile.mktemp()
     tf = open(fn, 'w')
@@ -292,5 +292,5 @@ key2:              ##comment
     # print(data)
     os.remove(fn)
 
-# now test some real files
-
+if __name__ == '__main__':
+    pass
