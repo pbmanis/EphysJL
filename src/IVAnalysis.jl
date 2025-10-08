@@ -1,3 +1,4 @@
+__precompile__()
 module IVAnalysis
 using LsqFit
 using Statistics
@@ -79,18 +80,21 @@ function fit_iv(
         td = tdat[ipts, i]
         p0 = p00
         vd = vdat[ipts, i]
-        fit = curve_fit(expmodel, td .- iwin[1], vd, p0)
-        params[i] = fit.param
+        istep = mean(idat[ipts, i]) - mean(idat[1:10, i])
+        fit = curve_fit(expmodel, td .- iwin[1], vd, p0; lower=lb, upper=ub)
+        params[j] = fit.param
         @printf(
-            "Params: DC= %8.2f mV A = %8.2f mV  Tau = %8.3f ms\n",
-            params[i][1] * 1e3,
-            params[i][2] * 1e3,
-            params[i][3] * 1e3
+            "Params: DC= %8.2f mV A = %8.2f mV  Tau = %8.3f ms Istep= %8.3f nA\n",
+            params[j][1] * 1e3,
+            params[j][2] * 1e3,
+            params[j][3] * 1e3,
+            istep * 1e9
         )
-        tfit[:, i] = td
-        vfit[:, i] = expmodel(td .- iwin[1], params[i])
+        tfit[:, j] = td
+        vfit[:, j] = expmodel(td .- iwin[1], params[j])
     end
-    return tfit, vfit, params
+    println("returning fit and params")
+    return tfit, vfit, imn, params
 end
 
 """
@@ -169,6 +173,7 @@ function IV_read_and_plot(; filename::String="", fits::Bool=true, ivs::Bool=true
             IVAnalysis.fit_iv(tdat, vdat, idat, iwin=[0.2, 0.6], ilim=[-1e-9, 10e-12])
 
     end
+    println("analyze spikes? ", analyze_spikes)
     if analyze_spikes
         spk_counts, spk_amps, spk_latencies = SpikeAnalysis.AnalyzeSpikes(tdat, vdat, idat)
     end
@@ -271,4 +276,5 @@ function test()
     IV_read_and_plot(filename=file, fits=true, ivs=true, analyze_spikes=true)
 end
 
+# main()
 end
