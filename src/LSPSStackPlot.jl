@@ -8,12 +8,17 @@ using Printf
 # using GLMakie
 # using CairoMakie
 # using WGLMakie
-using Plots
-gr()
+
 # whichMakie.activate!()  # interactive first
 # using AbstractPlotting
 # AbstractPlotting.__init__()
 # AbstractPlotting.inline!(false)
+
+using PythonCall
+ENV["MPLBACKEND"] = "Qt5Agg"
+using PythonPlot
+pygui(true)
+
 include("MiniAnalysis.jl")
 include("Acq4Reader.jl")
 
@@ -44,27 +49,27 @@ function stack_plot2(
     saveflag : set true to write file to disk
     =#
     println("   Doing stacked trace plot")
-    if makie == "i"
-        GLMakie.activate!()
-        whichMakie = GLMakie
-        resolution = (6000, 6000)
-        println("Activated GLMakie")
-    elseif makie == "p"
-        resolution = (6000, 6000)
-        CairoMakie.activate!()
-        whichMakie = CairoMakie
-        println(("activated CairoMakie"))
-    elseif makie == "w"
-        WGLMakie.activate!()
-        whichMakie = WGLMakie
-        resolution = (1000, 1000)
+    # if makie == "i"
+    #     GLMakie.activate!()
+    #     whichMakie = GLMakie
+    #     resolution = (6000, 6000)
+    #     println("Activated GLMakie")
+    # elseif makie == "p"
+    #     resolution = (6000, 6000)
+    #     CairoMakie.activate!()
+    #     whichMakie = CairoMakie
+    #     println(("activated CairoMakie"))
+    # elseif makie == "w"
+    #     WGLMakie.activate!()
+    #     whichMakie = WGLMakie
+    #     resolution = (1000, 1000)
 
-        println(("activated WGLMakie"))
-    else
-        println("makie must be either i (interactive) or p (pdf)")
-        return nothing
-    end
-    AbstractPlotting.__init__()
+    #     println(("activated WGLMakie"))
+    # else
+    #     println("makie must be either i (interactive) or p (pdf)")
+    #     return nothing
+    # end
+    # AbstractPlotting.__init__()
 
     vspc = 50 * 1e-12
     twin = [0.0, 1.0]
@@ -87,32 +92,46 @@ function stack_plot2(
     ylims = [bot_lims, top_lims]
 
     # n, df = MiniAnalysis.events_to_dataframe(events)
-    figure = whichMakie.Figure(; resolution=resolution)
-    ax1 = figure[1, 1] = whichMakie.Axis(figure)
-    figure[0, :] = whichMakie.Label(figure, figurename; textsize=10)
-    figure[3, 1] = buttongrid = GridLayout(; tellwidth=false)
-
+    # figure = whichMakie.Figure(; resolution=resolution)
+    # ax1 = figure[1, 1] = whichMakie.Axis(figure)
+    # figure[0, :] = whichMakie.Label(figure, figurename; textsize=10)
+    # figure[3, 1] = buttongrid = GridLayout(; tellwidth=false)
+    println("Starting figure")
+    figurename = "LSPS Stackplot Analysis"
+    fig, axs = plt.subplot_mosaic("""
+A
+""", 
+    figsize=(8, 10)) #width_ratios=[1, 1], height_ratios=[1, 1, 1, 1, 1])
+    fig.suptitle(figurename, fontsize=14, fontweight="bold")
+    axl = vec(collect(values(axs)))
+    # clean up Plots
+    for ax in axl
+        ax.grid(false)
+        ax.spines["top"].set_visible(false)
+        ax.spines["right"].set_visible(false)
+        ax.tick_params(direction="out", length=3, width=0.75)
+    end
     # scene = Scene(figure)
     # cam = whichMakie.cam2D!(figure) # you can also get the cam from an existing scene
     # cam[:panbutton] = Mouse.left
 
-    whichMakie.hidespines!(ax1, :t, :r, :l)
-    whichMakie.hideydecorations!(ax1)
-    whichMakie.hidexdecorations!(ax1; ticks=false, ticklabels=false)
-    ax1.xticks = 0.0:0.2:1.0
+    # whichMakie.hidespines!(ax1, :t, :r, :l)
+    # whichMakie.hideydecorations!(ax1)
+    # whichMakie.hidexdecorations!(ax1; ticks=false, ticklabels=false)
+    # ax1.xticks = 0.0:0.2:1.0
     # println(minimum(vertical_offset), maximum(vertical_offset))
     # ax1.yticks=collect(range(0, maximum(vertical_offset); step=500e-12))
     # ax1.yminorticks = 5
     # ax1.yminorticksvisible = true
-    whichMakie.lines!(
-        ax1, [-0.06, -0.06, -0.01], [50e-12, 0, 0]; linewidth=1.25, color=:black
-    )
-    whichMakie.annotations!(
-        "50 pA"; position=Point2f0(-0.07, 25e-12), textsize=8, align=(:left, :center)
-    )
-    whichMakie.annotations!(
-        "50 ms"; position=Point2f0(-0.035, -20e-12), textsize=8, align=(:center, :top)
-    )
+    # whichMakie.lines!(
+    #     ax1, [-0.06, -0.06, -0.01], [50e-12, 0, 0]; linewidth=1.25, color=:black
+    # )
+    # whichMakie.annotations!(
+    #     "50 pA"; position=Point2f0(-0.07, 25e-12), textsize=8, align=(:left, :center)
+    # )
+    # whichMakie.annotations!(
+    #     "50 ms"; position=Point2f0(-0.035, -20e-12), textsize=8, align=(:center, :top)
+    # )
 
     idx = [vcat(tdat[ipts, i], NaN) for i in 1:ntraces]
     idy = [vcat(idat[ipts, i] .+ vertical_offset[i], NaN) for i in 1:ntraces]
@@ -157,41 +176,46 @@ function stack_plot2(
     sty = [vcat([maximum(vertical_offset), 0.0], NaN) for i in 1:size(stim_lats)[1]]
     stx = reduce(vcat, stx)
     sty = reduce(vcat, sty)
-    whichMakie.lines!(ax1, stx, sty; linewidth=0.5, color=:lightblue, overdraw=true)
+    axl[1].plot(stx, sty; linewidth=0.5, color="lightblue", alpha=0.5)
+    # whichMakie.lines!(ax1, stx, sty; linewidth=0.5, color=:lightblue, overdraw=true)
     # sfx = (0.0, 1.0)
     # sfy = (minimum(vertical_offset)-vspc, maximum(vertical_offset)+vspc)# title = plot(
 
-    if whichMakie == "GLMakie"
-        println("Building buttons for GLMakie")
-        button_labels = ["Reset Axes", "Save  png", "save  pdf"]
-        buttons =
-            buttongrid[1, 1:3] = [
-                whichMakie.Button(figure; label=button_labels[i]) for i in 1:3
-            ]
+    # if whichMakie == "GLMakie"
+    #     println("Building buttons for GLMakie")
+    #     button_labels = ["Reset Axes", "Save  png", "save  pdf"]
+    #     buttons =
+    #         buttongrid[1, 1:3] = [
+    #             whichMakie.Button(figure; label=button_labels[i]) for i in 1:3
+    #         ]
 
-        on(buttons[1].clicks) do n
-            whichMakie.xlims!(ax1, sfx)
-            whichMakie.ylims!(ax1, sfy)
-        end
-        on(buttons[2].clicks) do n
-            GLMakie.activate!()
-            save("stack_plot2.png", figure)
-            println("PNG saved")
-        end
-        on(buttons[3].clicks) do n
-            whichMakie.activate!()
-            save("stack_plot2.pdf", figure)
-            println("PDF saved")
-        end
-    end
-    println("Which Makie: ", whichMakie)
+    #     on(buttons[1].clicks) do n
+    #         whichMakie.xlims!(ax1, sfx)
+    #         whichMakie.ylims!(ax1, sfy)
+    #     end
+    #     on(buttons[2].clicks) do n
+    #         GLMakie.activate!()
+    #         save("stack_plot2.png", figure)
+    #         println("PNG saved")
+    #     end
+    #     on(buttons[3].clicks) do n
+    #         whichMakie.activate!()
+    #         save("stack_plot2.pdf", figure)
+    #         println("PDF saved")
+    #     end
+    # end
+    # println("Which Makie: ", whichMakie)
 
-    if whichMakie == CairoMakie
-        save("stack_plot2_cairo.png", figure)
-    else
-        display(figure)
-    end
+    # if whichMakie == CairoMakie
+    #     save("stack_plot2_cairo.png", figure)
+    # else
+    #     display(figure)
+    # end
     # save("stack_plot.pdf", figure)  # when done
+    tight_layout()
+    savefig("stack_plot2_mpl.pdf")
+    pyplot.close("all")
+    print("Show finished")
     return figure
 end
 
