@@ -20,8 +20,10 @@ using DataFrames
 # using OnlineStats
 #using BenchmarkTools  Throws error in package
 
-#ENV["MPLBACKEND"] = "MacOSX"
-using Plots
+using PythonCall
+ENV["MPLBACKEND"] = "Qt5Agg"
+using PythonPlot
+pygui(true)
 
 include("LSPSPlotting.jl")
 include("Acq4Reader.jl")
@@ -152,40 +154,41 @@ Scatter of pairs of datasets, with marginal distributions
 """
 
 function compare_plots(x, y; labx="", laby="", binsx=25, binsy=25, ms=2)
-    p2 = plot(
-        x,
-        y;
-        seriestype=:scatter,
-        markercolor="black",
-        markerstokewidth=0.1,
-        markersize=2,
-        markeralpha=0.5,
-        xlim=[0, maximum(x)],
-        xlabel=labx,
-        ylim=[0, maximum(y)],
-        ylabel=laby,
-        # subplot = 1,
-        framestyle=:box,
-    )
-    p3 = plot(
-        x;
-        seriestype=:histogram,
-        bins=binsx,
-        orientation=:v,
-        framestyle=:semi,
-        xlim=[0, maximum(x)],
-        ylabel=labx,
-    )
-    p4 = plot(
-        y;
-        seriestype=:histogram,
-        bins=binsy,
-        orientation=:h,
-        framestyle=:semi,
-        ylim=[0, maximum(y)],
-        xlabel=laby,
-    )
-    return (scatter=p2, mx=p3, my=p4)
+    return nothing, nothing, nothing
+    # p2 = plot(
+    #     x,
+    #     y;
+    #     seriestype=:scatter,
+    #     markercolor="black",
+    #     markerstokewidth=0.1,
+    #     markersize=2,
+    #     markeralpha=0.5,
+    #     xlim=[0, maximum(x)],
+    #     xlabel=labx,
+    #     ylim=[0, maximum(y)],
+    #     ylabel=laby,
+    #     # subplot = 1,
+    #     framestyle=:box,
+    # )
+    # p3 = plot(
+    #     x;
+    #     seriestype=:histogram,
+    #     bins=binsx,
+    #     orientation=:v,
+    #     framestyle=:semi,
+    #     xlim=[0, maximum(x)],
+    #     ylabel=labx,
+    # )
+    # p4 = plot(
+    #     y;
+    #     seriestype=:histogram,
+    #     bins=binsy,
+    #     orientation=:h,
+    #     framestyle=:semi,
+    #     ylim=[0, maximum(y)],
+    #     xlabel=laby,
+    # )
+    # return (scatter=p2, mx=p3, my=p4)
 end
 
 """
@@ -200,48 +203,50 @@ function plot_measures(x, data, crosses, events; labx="", laby="")
     pcrosses = crosses.pcrosses
 
     default(; fillcolor=:lightgrey, markercolor=:white, grid=false, legend=false)
-    l = @layout [aa{0.1h}; a{0.25h}; [b{0.75w,0.15h}; c{1.1w,0.8h} d{1h,0.15w}]]
-    # plot(layout = l, link = :both, size = (500, 500), margin = -10Plots.px)
-    p1 = plot(x, data; linewidth=0.5, color="black")
-    p1 = plot!(
-        p1,
-        x[ncrosses],
-        data[ncrosses];
-        seriestype=:scatter,
-        markercolor="blue",
-        markerstrokewidth=0,
-        markersize=4,
-    )
-    p1 = plot!(
-        p1,
-        x[pcrosses],
-        data[ncrosses];
-        seriestype=:scatter,
-        markercolor="red",
-        markerstrokewidth=0,
-        markersize=4,
-    )
-    p1 = plot!(
-        p1,
-        x[events.ipeak],
-        data[events.ipeak];
-        seriestype=:scatter,
-        markercolor="cyan",
-        markerstrokewidth=0,
-        markersize=4,
-    )
-    title = plot(;
-        title=@sprintf("%s Test", mode),
-        grid=false,
-        showaxis=false,
-        yticks=false,
-        xticks=false,
-        bottom_margin=-50Plots.px,
-    )
-    hp = compare_plots(events.durs, events.amps; labx="Dur (ms)", laby="Amp (pA)")
-    plot(title, p1, hp.mx, hp.hist, hp.my; layout=l) # , layout=grid(3, 1, heights = [0.1, 0.45, 0.35]))  # note use of show=true here - critical!
-    plot!(; size=(600, 600), show=true)
-    return display(plot)
+    # l = @layout [aa{0.1h}; a{0.25h}; [b{0.75w,0.15h}; c{1.1w,0.8h} d{1h,0.15w}]]
+    # # plot(layout = l, link = :both, size = (500, 500), margin = -10Plots.px)
+    # p1 = plot(x, data; linewidth=0.5, color="black")
+    # p1 = plot!(
+    #     p1,
+    #     x[ncrosses],
+    #     data[ncrosses];
+    #     seriestype=:scatter,
+    #     markercolor="blue",
+    #     markerstrokewidth=0,
+    #     markersize=4,
+    # )
+    # p1 = plot!(
+    #     p1,
+    #     x[pcrosses],
+    #     data[ncrosses];
+    #     seriestype=:scatter,
+    #     markercolor="red",
+    #     markerstrokewidth=0,
+    #     markersize=4,
+    # )
+    # p1 = plot!(
+    #     p1,
+    #     x[events.ipeak],
+    #     data[events.ipeak];
+    #     seriestype=:scatter,
+    #     markercolor="cyan",
+    #     markerstrokewidth=0,
+    #     markersize=4,
+    # )
+    # title = plot(;
+    #     title=@sprintf("%s Test", mode),
+    #     grid=false,
+    #     showaxis=false,
+    #     yticks=false,
+    #     xticks=false,
+    #     bottom_margin=-50Plots.px,
+    # )
+    # hp = compare_plots(events.durs, events.amps; labx="Dur (ms)", laby="Amp (pA)")
+    # plot(title, p1, hp.mx, hp.hist, hp.my; layout=l) # , layout=grid(3, 1, heights = [0.1, 0.45, 0.35]))  # note use of show=true here - critical!
+    # plot!(; size=(600, 600), show=true)
+    # d  = display(plot)
+    d = nothing
+    return d
 end
 
 struct Event
@@ -1166,63 +1171,63 @@ function plot_events(
 
     hp = compare_plots(evdurs, evamps; labx="Durs", laby="Amps", binsx=25, binsy=25)
 
-    title = plot(;
-        title=@sprintf("%s Test", mode),
-        grid=false,
-        showaxis=false,
-        yticks=false,
-        xticks=false,
-        bottom_margin=-50Plots.px,
-    )
-    if template === nothing
-        l = @layout(
-            [
-                a{0.1h}
-                b{0.25h}
-                c{0.1h}
-                d{0.1h}
-                e [f1{0.75w,0.15h}; f2{1.0w,0.8h} f3{1h,0.15w}]
-            ]
-        )
-        plot(
-            title,
-            p1,
-            p2,
-            p3,
-            p4,
-            hp.mx,
-            hp.scatter,
-            hp.my;
-            layout=l,
-            link=:x,
-            # grid(5, 1, heights = [0.1, 0.25, 0.25, 0.25, 0.15, 0.15]),
-        ) #, 0.30, 0.30]))
+    # title = plot(;
+    #     title=@sprintf("%s Test", mode),
+    #     grid=false,
+    #     showaxis=false,
+    #     yticks=false,
+    #     xticks=false,
+    #     bottom_margin=-50Plots.px,
+    # )
+    # if template === nothing
+    #     l = @layout(
+    #         [
+    #             a{0.1h}
+    #             b{0.25h}
+    #             c{0.1h}
+    #             d{0.1h}
+    #             e [f1{0.75w,0.15h}; f2{1.0w,0.8h} f3{1h,0.15w}]
+    #         ]
+    #     )
+    #     plot(
+    #         title,
+    #         p1,
+    #         p2,
+    #         p3,
+    #         p4,
+    #         hp.mx,
+    #         hp.scatter,
+    #         hp.my;
+    #         layout=l,
+    #         link=:x,
+    #         # grid(5, 1, heights = [0.1, 0.25, 0.25, 0.25, 0.15, 0.15]),
+    #     ) #, 0.30, 0.30]))
 
-    else
-        l = @layout(
-            [
-                a{0.1h}
-                b{0.25h}
-                c{0.1h}
-                d{0.1h}
-                [f1{0.75w,0.15h}; f2{1.0w,0.8h} f3{1h,0.15w}]
-            ]
-        )
-        plot(
-            title,
-            p1,
-            p2,
-            p3,
-            hp.mx,
-            hp.scatter,
-            hp.my;
-            layout=l,
-            link=:x,
-            # grid(5, 1, heights = [0.1, 0.25, 0.25, 0.25, 0.15, 0.15]),
-        ) #, 0.30, 0.30]))
-    end
+    # else
+    #     l = @layout(
+    #         [
+    #             a{0.1h}
+    #             b{0.25h}
+    #             c{0.1h}
+    #             d{0.1h}
+    #             [f1{0.75w,0.15h}; f2{1.0w,0.8h} f3{1h,0.15w}]
+    #         ]
+    #     )
+    #     plot(
+    #         title,
+    #         p1,
+    #         p2,
+    #         p3,
+    #         hp.mx,
+    #         hp.scatter,
+    #         hp.my;
+    #         layout=l,
+    #         link=:x,
+    #         # grid(5, 1, heights = [0.1, 0.25, 0.25, 0.25, 0.15, 0.15]),
+    #     ) #, 0.30, 0.30]))
+    # end
 
-    u = plot!(; size=(600, 600))
+    # u = plot!(; size=(600, 600))
     return u
     # Plots.savefig("CB_test.pdf")
 end
