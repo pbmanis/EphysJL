@@ -3,10 +3,14 @@ import DataFrames: DataFrame, describe, select, Not
 import StatsBase: countmap, cor, var
 using Distributions
 using MLJ
-@load LDA pkg = "MultivariateStats"
+using MultivariateStats
 
 using Distances
-using PyPlot
+using PythonCall
+ENV["MPLBACKEND"] = "Qt5Agg"
+using PythonPlot
+pygui(true)
+
 export epsc_lda
 """
 Compute LDA and identify events based on training set. 
