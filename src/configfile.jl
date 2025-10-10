@@ -1,5 +1,5 @@
 module Configfile
-using PyCall
+using PythonCall, Pipe
 using JSON
 # configfile.jl : based on:
 # 	configfile.py - Human-readable text configuration file library
@@ -33,11 +33,10 @@ UNITS = split("m,s,g,W,J,V,A,F,T,Hz,Ohm,S,N,C,px,b,B", ",")
 allUnits = Vector{String}()
 cm = 0.01
 
-py"""
-# import numpy as np
+@pyexec """
 def eval_value(arg):
     return(eval(arg))
-"""
+""" => eval_value
 
 function addUnit(p, n)
     v = 1000 ^ n
@@ -174,13 +173,13 @@ function parseConfigString(lines::AbstractString; start::Int64 = 1, verbose::Boo
             if (value[1] in ['{', '(', '[']) & (value[end] in [']', ')', '}'])
                 # strip out the "array" as pycall doesn't know how to evaluate it
                 value = replace(value, "array([" => "([")
-                val = py"eval_value"(value)
+                val = @pipe eval_value(value) |> pyconvert(Any, _)
             elseif startswith(value, "ColorMap")
                 p, value = ColorMap(value)
                 value = join([p, value], ", ")
-                val = py"eval_value"(value)
+                val = @pipe eval_value(value) |> pyconvert(Any, _)
             else
-                val = py"eval_value"(value)
+                val = @pipe eval_value(value) |> pyconvert(Any, _)
 
             end
 
