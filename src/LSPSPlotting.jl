@@ -6,10 +6,13 @@ using StatsBase
 import DataFrames: DataFrame, describe, select, Not
 using Statistics
 using Printf
-@add using NoiseRobustDifferentiation
-# ENV["MPLBACKEND"] = "MacOSX"
-using Plots
-gr()
+using NoiseRobustDifferentiation
+#
+using PythonCall
+ENV["MPLBACKEND"] = "Qt5Agg"
+using PythonPlot
+pygui(true)
+
 
 include("LSPSFitting.jl")
 include("Acq4Reader.jl")
@@ -19,57 +22,99 @@ export plot_event_distribution
 
 function plot_event_distributions(df; response_window=25.0, figurename="")
     # d is the dataframe (from miniAnalysis events_to_dataframe)
-    binsx = 50
-    p_amp = plot(
-        df.amp;
-        seriestype=:histogram,
-        bins=binsx,
-        orientation=:v,
-        framestyle=:semi,
-        xlim=[0, maximum(df.amp)],
-        xlabel="Amplitude (pA)",
-        ylabel="# obs",
-    )
-    p_dur = plot(
-        df.dur;
-        seriestype=:histogram,
-        bins=binsx,
-        orientation=:v,
-        framestyle=:semi,
-        xlim=[0, maximum(df.dur)],
-        xlabel="Durations (ms)",
-        ylabel="# obs",
-    )
-    p_rt = plot(
-        df.rt;
-        seriestype=:histogram,
-        bins=binsx,
-        orientation=:v,
-        framestyle=:semi,
-        xlim=[0, maximum(df.rt)],
-        xlabel="Rise Times (ms)",
-        ylabel="# obs",
-    )
-    p_lat = plot(
-        df.lat[df.lat .>= 0.0];
-        seriestype=:histogram,
-        bins=binsx,
-        orientation=:v,
-        framestyle=:semi,
-        xlim=[0, response_window],
-        xlabel="Latencies (ms)",
-        ylabel="# obs",
-    )
-    l = @layout [a b; c d] # ; e f]
-    u = plot(p_amp, p_dur, p_rt, p_lat; layout=l, show=true)
-    if figurename != ""
-        savefig(u, figurename)
+    fig, axs = plt.subplot_mosaic("""
+AB
+CD
+""", 
+    figsize=(8, 10)) #width_ratios=[1, 1], height_ratios=[1, 1, 1, 1, 1])
+    fig.suptitle(figurename, fontsize=14, fontweight="bold")
+    axl = vec(collect(values(axs)))
+    # clean up Plots
+    for ax in axl
+        ax.grid(false)
+        ax.spines["top"].set_visible(false)
+        ax.spines["right"].set_visible(false)
+        ax.tick_params(direction="out", length=3, width=0.75)
     end
+    binsx = 50
+    axl[1].hist(df.amp[df.lat .>= 0.0]; bins=binsx, orientation="vertical")
+    axl[1].set_xlabel("Amplitude (pA)")
+    axl[1].set_ylabel("# obs")
+    axl[1].set_xlim(0, maximum(df.amp))
+    axl[1].set_title("Event Amplitudes")
+ 
+    # p_amp = plot(
+    #     df.amp;
+    #     seriestype=:histogram,
+    #     bins=binsx,
+    #     orientation=:v,
+    #     framestyle=:semi,
+    #     xlim=[0, maximum(df.amp)],
+    #     xlabel="Amplitude (pA)",
+    #     ylabel="# obs",
+    # )
+    axl[2].hist(df.dur, bins=binx, orientation="vertical")
+    axl[2].set_xlabel("Durations")
+    axl[2].set_ylabel("# obs")
+    axl[2].set_xlim(0, maximum(df.dur))
+    axl[2].set_title("Event Durations")
+
+    # p_dur = plot(
+    #     df.dur;
+    #     seriestype=:histogram,
+    #     bins=binsx,
+    #     orientation=:v,
+    #     framestyle=:semi,
+    #     xlim=[0, maximum(df.dur)],
+    #     xlabel="Durations (ms)",
+    #     ylabel="# obs",
+    # )
+    axl[3].hist(df.rt, bins=binx, orientation="vertical")
+    axl[3].set_xlabel("Rise Time (ms)")
+    axl[3].set_ylabel("# obs")
+    axl[3].set_xlim(0, maximum(df.rt))
+
+
+    # p_rt = plot(
+    #     df.rt;
+    #     seriestype=:histogram,
+    #     bins=binsx,
+    #     orientation=:v,
+    #     framestyle=:semi,
+    #     xlim=[0, maximum(df.rt)],
+    #     xlabel="Rise Times (ms)",
+    #     ylabel="# obs",
+    # )
+    axl[3].hist(df.lat[df.lat .> 0], bins=binsx, orientation="vertical")
+    axl[3].hist(df.rt, bins=binx, orientation="vertical")
+    axl[3].set_xlabel("Latency (ms)")
+    axl[3].set_ylabel("# obs")
+    axl[3].set_xlim(0, maximum(df.lat))
+
+    # p_lat = plot(
+    #     df.lat[df.lat .>= 0.0];
+    #     seriestype=:histogram,
+    #     bins=binsx,
+    #     orientation=:v,
+    #     framestyle=:semi,
+    #     xlim=[0, response_window],
+    #     xlabel="Latencies (ms)",
+    #     ylabel="# obs",
+    # )
+    # l = @layout [a b; c d] # ; e f]
+    # u = plot(p_amp, p_dur, p_rt, p_lat; layout=l, show=true)
+    # if figurename != ""
+    #     savefig(u, figurename)
+    # end
+    tight_layout()
+    savefig("LSPS_Analysis.pdf")
+    pyplot.close("all")
+    print("Show finished")
     return u
 end
 
 function decorate_and_paint!(
-    p_I,
+    p_I,  # using matplotlib.pyplot, this is axis object
     tdat::Vector,
     idat::Vector,
     vertical_offset::Float64,
@@ -123,50 +168,52 @@ function decorate_and_paint!(
             markersize = 4
             markershape = :star5  # mark all others
         end
-        p_I = plot!(
-            p_I,
+
+        # p_I = plot!(
+        p_I.plot(
             [dfr.peaktime * 1e-3],
             [(sign * dfr.amp * 1e-12) .+ vertical_offset];
-            seriestype=:scatter,
-            markercolor=:red,
+            # seriestype=:scatter,
+            marker='o',
+            markerfacecolor=:red,
             markersize=markersize,
             markershape=markershape,
-            legend=false,
+            label=false,
         )
     end
 
     # decorate with a dot at the peak using the passed color for the event type
-    p_I = plot!(
-        p_I,
+    p_I.plot(
         pkt .* 1e-3,
         (amp .* 1e-12) .+ vertical_offset;
-        seriestype=:scatter,
-        markercolor=markercolor,
-        markerstrokecolor=markercolor,
-        markeralpha=0.35,
-        markerstrokewidth=0.5,
+        # seriestype=:scatter,
+        marker='s',
+        color=markercolor,
+        markeredgecolor=markercolor,
+        # markeralpha=0.35,
+        markeredgewidth=0.5,
         markersize=2.5,
-        legend=false,
+        label=false,
     )
     # paint events according to their classification
     for k in 1:size(onset)[1]
         onset_i = Int64(floor(1e-3 .* onset[k] ./ dt_seconds))
         pkend_i = Int64(floor(1e-3 .* (onset[k] .+ dur[k]) ./ dt_seconds))
         # println("onset: ", onset_i, " pkend: ", pkend_i)
-        p_I = plot!(
-            p_I,
+        p_I.plot(
+           # p_I,
             tdat[onset_i:pkend_i],
             idat[onset_i:pkend_i] .+ vertical_offset;
             color=linecolor,
             linewidth=1.0 * linewidth,
-            legend=false,
+            label=false,
         )
     end
     return p_I
 end
 
 function plot_one_trace(
-    p_I,
+    p_I, # axis object for matplotlib.pyplot
     tdat,
     idat;
     vertical_offset::Float64=0.0,
@@ -192,20 +239,22 @@ function plot_one_trace(
     dt_seconds = mean(diff(tdat))
     # plot traces simply
     if isnothing(p_I)
-        p_I = plot(
-            tdat,
-            idat .+ vertical_offset;
-            linewidth=linewidth,
-            color=linecolor,
-            # xlim = [0.0, tmax],# xlabel="Dur (ms)",
-            # ylim = ylims, #ylabel="Amp (pA)",
-            # subplot = 1,
-            framestyle=:none,
-            legend=false,
-        )
+        return
+
+        # p_I.plot(
+        #     tdat,
+        #     idat .+ vertical_offset;
+        #     linewidth=linewidth,
+        #     color=linecolor,
+        #     # xlim = [0.0, tmax],# xlabel="Dur (ms)",
+        #     # ylim = ylims, #ylabel="Amp (pA)",
+        #     # subplot = 1,
+        #     # framestyle=:none,
+        #     label=false,
+        # )
     else
-        p_I = plot!(
-            p_I,
+        p_I.plot(
+            #p_I,
             tdat,
             idat .+ vertical_offset;
             linewidth=linewidth,
@@ -289,52 +338,56 @@ function fit_and_plot_events(
 
     # println("praw: ", isnothing(p_raw), "   p_sub", isnothing(p_sub))
     # top panel: plot raw data
-    if isnothing(p_raw)
-        p_raw = plot(x, y; linecolor=color, legend=false)
-        p_raw = plot!(p_raw, x, yfit; linecolor=color, legend=false, linestyle=:dash)
-    else
-        p_raw = plot!(p_raw, x, y; linecolor=color, legend=false)
-        p_raw = plot!(p_raw, x, yfit; linecolor=color, legend=false, linestyle=:dash)
-        # println("was not nothing")
+    if !isnothing(p_raw)
+        p_raw.plot(x, y; linecolor=color, label=false)
+        p_raw.plo(x, yfit; linecolor=color, label=false, linestyle='-')
+    # else
+    #     p_raw = plot!(p_raw, x, y; linecolor=color, legend=false)
+    #     p_raw = plot!(p_raw, x, yfit; linecolor=color, legend=false, linestyle=:dash)
+    #     # println("was not nothing")
     end
     
     # second panel: show the derivative, for original data and for fit data
     yprime = tvdiff(y, 100, 0.2; dx=x[2]-x[1], scale="small", ε = 1e-9)
     yfitprime = tvdiff(yfit, 100, 0.2; dx=x[2]-x[1], scale="small", ε = 1e-9)
-    if isnothing(p_deriv)
-        p_deriv = plot(x, yprime; linecolor=color, legend=false)
-        p_deriv = plot!(p_deriv, x, yfitprime; linecolor=color, legend=false, linestyle=:dash)
-    else
-        p_deriv = plot!(p_deriv, x, yprime; linecolor=color, legend=false)
-        p_deriv = plot!(p_deriv, x, yfitprime; linecolor=color, legend=false, linestyle=:dash)
+    if not isnothing(p_deriv)
+        p_deriv.plot(x, yprime; linecolor=color, label=false)
+        p_deriv.plot(p_deriv, x, yfitprime; linecolor=color, label=false, linestyle=:dash)
+    # else
+    #     p_deriv = plot!(p_deriv, x, yprime; linecolor=color, legend=false)
+    #     p_deriv = plot!(p_deriv, x, yfitprime; linecolor=color, legend=false, linestyle=:dash)
     end
 
     # third panel: plot the difference
-    if isnothing(p_sub)
-        p_sub = plot(x, y .- yfit; linecolor=color, legend=false)
-    else
-        p_sub = plot!(p_sub, x, y .- yfit; linecolor=color, legend=false)
+    if not isnothing(p_sub)
+        p_sub.plot(x, y .- yfit; linecolor=color, label=false)
+    # else
+    #     p_sub = plot!(p_sub, x, y .- yfit; linecolor=color, legend=false)
     end
     return p_raw, p_deriv, p_sub, yfit*1e-12
 end
 
 function finalize_fitted_plot(p1, pd, p2; figurename="direct_demo.pdf")
-    if (p1 === nothing) | (p2 === nothing) | (pd === nothing)
-        return nothing
-    end
-    l = @layout [a; b; c] # ; e f]
-    xlabel!(p1, "T (ms)")
-    ylabel!(p1, "I (pA)")
-    xlabel!(pd, "T (ms)")
-    ylabel!(pd, "pA/ms")
-    xlabel!(p2, "T (ms)")
-    ylabel!(p2, "I (pA)")
-    PX = plot(p1, pd, p2; layout=l, size=(600, 600), show=true)
-    println("direct subtraction plot generated, output=", figurename)
-    if figurename != ""
-        savefig(PX, figurename)
-    end
-    return PX
+    tight_layout()
+    savefig(figurename)
+    pyplot.close("all")
+    print("Show finished")
+    # if (p1 === nothing) | (p2 === nothing) | (pd === nothing)
+    #     return nothing
+    # end
+    # l = @layout [a; b; c] # ; e f]
+    # xlabel!(p1, "T (ms)")
+    # ylabel!(p1, "I (pA)")
+    # xlabel!(pd, "T (ms)")
+    # ylabel!(pd, "pA/ms")
+    # xlabel!(p2, "T (ms)")
+    # ylabel!(p2, "I (pA)")
+    # PX = plot(p1, pd, p2; layout=l, size=(600, 600), show=true)
+    # println("direct subtraction plot generated, output=", figurename)
+    # if figurename != ""
+    #     savefig(PX, figurename)
+    # end
+    # return PX
 end
 
 function stack_plot(
@@ -378,7 +431,24 @@ function stack_plot(
     bot_lims = -vspc
     ylims = [bot_lims, top_lims]
 
-    p_I = nothing
+    figurename = "LSPS  Analysis"
+#     fig, axs = plt.subplot_mosaic("""
+# A
+# """, figsize=(8, 10)) # width_ratios=[3, 1], height_ratios=[1, 1, 1, 1, 1], figsize=(8, 10))
+    # ion()  # interactive mode on
+    # fig, axs = subplots(2, 2, figsize=(8 10))
+    fig, ax = plt.subplots(1, 1, figsize=(8, 10))
+    prinln("fig instantiated")
+    fig.suptitle(figurename, fontsize=14, fontweight="bold")
+    axl = vec(collect(values(axs)))
+    # clean up Plots
+    for ax in axl
+        ax.grid(false)
+        ax.spines["top"].set_visible(false)
+        ax.spines["right"].set_visible(false)
+        ax.tick_params(direction="out", length=3, width=0.75)
+    end
+    p_I = axl[1]
     @timed for i in 1:ntraces
         # println("Plotting trace: ", i)
         lc = :black
@@ -387,8 +457,8 @@ function stack_plot(
             lc = :red
             lw = 0.5
         end
-        p_I = plot_one_trace(
-            p_I,
+        p_I.plot_one_trace(
+            axl[1],
             tdat[ipts, i],
             idat[ipts, i];
             vertical_offset=vertical_offset[i],
@@ -407,52 +477,60 @@ function stack_plot(
     stim_lats = Acq4Reader.get_stim_arg("latency", data_info; device="Laser")
     # blue vertical lines for stimulus locations
     for i in 1:size(stim_lats)[1]
-        p_I = plot!(
-            p_I,
+        p_I = p_I.plot(
+            # paxl[1],
             [stim_lats[i], stim_lats[i]],
-            [ylims[1], ylims[2]];
+            [ylims[1], ylims[2]],
             linewidth=0.5,
             linecolor=:blue,
         )
     end
-    p_I = plot!(p_I; ylims=ylims)
+    # p_I = p_I.plot(p_I; ylims=ylims)
+    p_I.set_ylims(ylims)
     labels = Dict(
         "Evoked" => :red, "Direct" => :yellow, "Spontaneous" => :gray, "Noise" => "magenta"
     )
     i = 0
     for (class, color) in labels
-        p_I = plot!(
-            p_I,
-            #[0.05 + 0.1 * (i - 1)],
-            [ylims[1] - 1.1 * vspc];
+        p_I = p_I.plot(
+            #p_I,
+            [0.05 + 0.1 * (i - 1)],
+            [ylims[1] - 1.1 * vspc],
             linewidth=2,
             label=class,
             color=color,
         )
         i += 1
     end
-    title = plot(;
-        title=@sprintf("%s :: %s\n%s", method, figurename, figtitle),
-        grid=false,
-        showaxis=false,
-        yticks=false,
-        xticks=false,
-        bottom_margin=-50Plots.px,
-    )
-    l = @layout([a{0.1h}; b])
+    # title = plot(;
+    #     title=@sprintf("%s :: %s\n%s", method, figurename, figtitle),
+    #     grid=false,
+    #     showaxis=false,
+    #     yticks=false,
+    #     xticks=false,
+    #     bottom_margin=-50Plots.px,
+    # )
+    
+    # l = @layout([a{0.1h}; b])
 
-    p_I = plot!(
-        title,
-        p_I;
-        # layout = l,
-        layout=l, # grid(5, 1, heights = [0.1, 0.25, 0.25, 0.25, 0.15, 0.15]),
-        titlefontsize = 9,
-    ) #, 0.30, 0.30]))
+    # p_I = plot!(
+    #     title,
+    #     p_I;
+    #     # layout = l,
+    #     layout=l, # grid(5, 1, heights = [0.1, 0.25, 0.25, 0.25, 0.15, 0.15]),
+    #     titlefontsize = 9,
+    # ) #, 0.30, 0.30]))
 
-    p_X = plot(p_I; windowsize=[600, 800], show=true)
-    if figurename != ""
-        savefig(p_X, figurename)
-    end
+    # p_X = plot(p_I; windowsize=[600, 800], show=true)
+    
+    tight_layout()
+    savefig("IV_Analysis.pdf")
+    pyplot.close("all")
+    println("Figure done")
+
+    # if figurename != ""
+    #     savefig(p_X, figurename)
+    # end
     return p_X
 end
 
