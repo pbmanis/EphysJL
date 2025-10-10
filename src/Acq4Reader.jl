@@ -8,24 +8,15 @@ using ElasticArrays
 using Crayons.Box
 using Distributed
 using SharedArrays  # important for parallel/looping
-# using ProgressMeter
-using InteractiveUtils
 
-using PyCall
 include("Configfile.jl")
-# pgc = pyimport("pyqtgraph.configfile")  # use python configuration reader...
-
-# Theoretically, the following should work, but we encounter an error:
-# "[NameError: name 'array' is not defined]")
-# on the scanner target array structure with lots of "array([ 0.00157848,  0.003536  ])"
-# scriptdir = @__DIR__
-# pushfirst!(PyVector(pyimport("sys")."path"), scriptdir)
-# pgc = pyimport("python.configfile")  # use a local python routine to read the config files
 
 export read_hdf5, get_lims, get_stim_times
-
-
-
+"""
+Find the subdirectories of the given base_dir, 
+and return those that are protocol sweeps,
+excluding .DS_Store and .index files.
+"""
 function get_subdirs(base_dir)
     # read the subdirectories of the current base_dir
     # only return those that are protocol sweeps
@@ -40,14 +31,17 @@ function get_subdirs(base_dir)
     return subdirs
 end
 
-function read_hdf5(filename)
-    #=
+"""
     Read the protocol data from the specified metaarray file,
     treating it as an HDF5 file (which it is)
 
     Return the data, and some "standard" y limits.
     New parallel version, 5/24/2021 pbm
-    =#
+    added parsing of pulse waveforms 10/2025 pbm
+
+"""
+function read_hdf5(filename)
+
     device = "MultiClamp1.ma"
     # device = "Clamp1.ma"
     laser_device = "Laser-Blue-raw.ma"
@@ -169,11 +163,12 @@ function read_hdf5(filename)
     return tdat, idat, vdat, data_info
 end
 
-function get_lims(mode)
     #=
     Set the top and bottom limits to some defaults according to the 
     acquistion mode
     =#
+function get_lims(mode)
+
     if mode == "'VC'"
         # print("VC")
         println(GREEN_FG, "Limts for VC", WHITE_FG)
@@ -191,11 +186,12 @@ function get_lims(mode)
     return top_lims, bot_lims
 end
 
-function get_indices(data_info)
     #= 
     get the array indices that correpond to v and i
     depending on the acquisition mode
     =#
+function get_indices(data_info)
+
     mode = String(data_info["clampstate"]["mode"])  # will be VC, IC or IC=0 (may depend on age of acquisition code)
     c0_units = String(data_info["c0"]["units"])
     c1_units = String(data_info["c1"]["units"])
@@ -235,11 +231,12 @@ end
 #     return stim_lats
 # end
 
-function get_stim_times(data_info; device="Laser")
     #=
     Retrieve stimulus times from a device's wavefunction parameters
     The default will get the information from a Laser device
     =#
+function get_stim_times(data_info; device="Laser")
+
     query = device * ".wavefunction"
     wv = data_info[query]
     u = split(wv, "\n")
@@ -301,21 +298,39 @@ function read_one_sweep(filename::AbstractString, sweep_dir, device)
     return time_array, data_array, data_info
 end
 
+"""
+Check the configuration file reader by reading a real acq4 index file
+"""
 function test_configread()
-    filename = "/Users/pbmanis/Desktop/2018.09.27_000/ImageSequence_000/.index"
-    data = Configfile.readConfigFile(filename)
-    println(data)
-    fn = "/Users/pbmanis/Desktop/Python/mrk-nf107/data_for_testing/CCIV/.index"
-    data = Configfile.readConfigFile(fn)
-    println(data)
-end
+    # filename = "/Users/pbmanis/Desktop/2018.09.27_000/ImageSequence_000/.index"
+    # data = Configfile.readConfigFile(filename)
+    # println(data)
+    # fn = "/Users/pbmanis/Desktop/Python/mrk-nf107/data_for_testing/CCIV/.index"
+    # data = Configfile.readConfigFile(fn)
+    # println(data)
+    file = "/Volumes/T7_data/NF107Ai32_Het/2022.02.15_000/slice_000/cell_003/CCIV_1nA_max_1s_pulse_000"
+    # file = "/Volumes/T7_data/NF107Ai32_Het/2022.03.18_000/slice_000/cell_000/CCIV_4nA_max_1s_pulse_posonly_000"
+    file1 = file * "/.index"
+    data = Configfile.readConfigFile(file1)
+    print("\n",file)
+    println(data)  
+    file2 = file * "/000/.index" 
+    data2= Configfile.readConfigFile(file2)  # the sweep index
+    print("\n", file2)
+    println(data2)
 
+ end
+
+"""
+Test the reader by reading a real acq4 data file
+""" 
 function test_reader()
     # local test file name
-    # filename = "/Volumes/Pegasus/ManisLab_Data3/Kasten_Michael/Pyramidal/2018.02.12_000/slice_001/cell_000/CCIV_1nA_max_000"
-    filename = "/Volumes/T7_data/NF107Ai32_Het/2022.03.18_000/slice_000/cell_000/CCIV_4nA_max_1s_pulse_posonly_000"
-    # filename = "/T7_data/NF107Ai32_Het/2022.03.18_000/slice_000/cell_000/CCIV_1nA_max_1s_pulse_000"
-    read_hdf5(filename)
+    # file= "/Volumes/Pegasus/ManisLab_Data3/Kasten_Michael/Pyramidal/2018.02.12_000/slice_001/cell_000/CCIV_1nA_max_000"
+    file = "/Volumes/T7_data/NF107Ai32_Het/2022.03.18_000/slice_000/cell_000/CCIV_4nA_max_1s_pulse_posonly_000"
+    # file= "/T7_data/NF107Ai32_Het/2022.03.18_000/slice_000/cell_000/CCIV_1nA_max_1s_pulse_000"
+    file = "/Volumes/T7_data/NF107Ai32_Het/2022.02.15_000/slice_000/cell_003/CCIV_1nA_max_1s_pulse_000"
+    read_hdf5(file)
 end
 
 
