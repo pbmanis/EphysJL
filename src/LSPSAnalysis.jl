@@ -8,7 +8,6 @@ using Crayons.Box
 using DSP
 using Base.Threads
 using Revise
-using Plots
 using Gtk
 using TextWrap
 
@@ -211,6 +210,13 @@ function LSPS_analyze(;
     end
 end
 
+
+#=
+Read an HDF5 file, do a little analysis on the data
+    -- ivs and fitting
+and plot the result
+=#
+
 function LSPS_read_and_plot(
     filename::String="";
     fits=true,
@@ -225,11 +231,6 @@ function LSPS_read_and_plot(
     println("Reading Data File, V0.5")
     println("Filename: ", filename)
 
-    #=
-    Read an HDF5 file, do a little analysis on the data
-        -- ivs and fitting
-    and plot the result
-    =#
 
     @time tdat, idat, vdat, data_info = Acq4Reader.read_hdf5(filename)
     stim_lats = Acq4Reader.get_stim_arg("latency", data_info)
@@ -457,7 +458,8 @@ function reanalyze(idat, tdat, dt_seconds, method, zcpars, classifier, data_info
     splitname = splitpath(filename)
     figtitle = joinpath(splitname[(end - 4):(end - 1)]...)
     figtitle = figtitle * "\n" * splitname[end]
-
+    PX = nothing
+    println("Plotting traces and annotations")
     @time PX = LSPSPlotting.stack_plot(
         df,
         tdat,
